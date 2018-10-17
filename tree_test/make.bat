@@ -1,0 +1,1 @@
+cl test.c ..\tree.c ..\slist.c
