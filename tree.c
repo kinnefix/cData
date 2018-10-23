@@ -5,78 +5,48 @@
 #include "tree.h"
 #include "slist.h"
 
-Node* tree_init(int data_size, char* (*serialize_func)(char*, char*), char* (*deserialize_func)(char*, char*)){
+extern SList* type_info_list;
+TypeInfo* node_type_info;
+
+void* node_init(){
+ Node* node = (Node*)malloc(sizeof(Node));
+ return (void*)node;
+}
+
+Node* tree_init(TypeInfo* type_info){
  Node* root = (Node*)malloc(sizeof(Node));
- root->data_size = data_size;
- root->data = malloc(data_size);
- root->child_list = slist_init(sizeof(Node*), 2);
- root->serialize_func = serialize_func;
- root->deserialize_func = deserialize_func;
+ root->type_info = type_info;
+ root->data = malloc(type_info->data_size);
+ root->child_list = slist_init(node_type_info, 2);
  return root;
 }
 
-void tree_add_child(Node* parent, Node** child){
- slist_append_last(parent->child_list, child, 1);
-}
-int tree_write(Node* node, char* dest){
- char* orig = dest;
- int structure_len=0;
- tree_get_structure(node, NULL, &structure_len);
- char* structure = (char*)malloc(sizeof(char)*structure_len);
- tree_get_structure(node, structure,NULL);
- memcpy(dest, &structure_len, sizeof(int)); dest+=sizeof(int);
- memcpy(dest, &node->data_size, sizeof(int)); dest+=sizeof(int);
- memcpy(dest, structure, sizeof(char)*structure_len); dest+=structure_len;
- dest = tree_write_data(node, dest);
- free(structure);
- return dest-orig;
-}
-char* tree_get_structure(Node* node, char* ptr, int* len){
- int child_list_len = slist_get_len(node->child_list);
- for(int i=0; i<child_list_len; i++){
-  if(ptr!=NULL)*ptr++='{'; if(len!=NULL) (*len)++;
-  ptr=tree_get_structure(*(Node**)slist_get(node->child_list,i), ptr, len);
-   if(ptr!=NULL)*ptr++='}';  if(len!=NULL)(*len)++;
- }
- return ptr;
-}
-char* tree_write_data(Node* node, char* ptr){
- ptr = node->serialize_func(ptr, node->data);
- int child_list_len = slist_get_len(node->child_list);
- for(int i=0; i<child_list_len; i++){
-  ptr = tree_write_data(*(Node**)slist_get(node->child_list, i), ptr);
- }
- return ptr;
+void tree_add_child(Node* parent, void* child){
+ slist_append(parent->child_list, child, 1);
 }
 
-char* tree_read_data(char** src, char* structure, Node* node, char* (*serialize_func)(char*, char*), char* (*deserialize_func)(char*, char*)){
- 
- *src = node->deserialize_func(node->data, *src);
- char* c = structure;
- for(;c[0]!='\0'; c++){
- printf("%c\n", c[0]);
-  switch(c[0]){
-   case '{':
-   Node* child = tree_init(node->data_size, serialize_func, deserialize_func);
-   tree_add_child(node, &child);
-   // slist_append_last(node->child_list, &child, 1);
-   c = tree_read_data(src, c+1, child, serialize_func, deserialize_func);
-   break;
-   case '}':
-   return c;
-   break;
-  }
- }
+void* node_serialize(Node* node, void* ptr){
+ TypeInfo* type_info = node->type_info;
+ memcpy(ptr, &type_info->type_idx, sizeof(int)); ((char*)ptr)+=sizeof(int);
+ ptr = type_info->serialize(node->data, ptr);
+ ptr = slist_serialize(node->child_list, ptr);
+ return ptr;
 }
-Node* tree_read(char* src, char* (*serialize_func)(char*, char*), char* (*deserialize_func)(char*, char*)){
- int structure_len = *((int*)src)++;
- int data_size = *((int*)src)++;
- char* structure = (char*)malloc(sizeof(char)*(structure_len+1));
- memcpy(structure, src, sizeof(char)*structure_len);
- src+=structure_len;
- structure[structure_len]='\0';
- printf("STRUCTURE: %s\n", structure);
- Node* root = tree_init(data_size, serialize_func, deserialize_func);
- tree_read_data(&src, structure, root, serialize_func, deserialize_func);
- return root;
+void* node_deserialize(void* dest, void* ptr){
+ int type_idx;
+ Node* node = (Node*)dest;
+ memcpy(&type_idx, ptr, sizeof(int)); ((char*)ptr)+=sizeof(int);
+ TypeInfo* type_info=slist_get(type_info_list, type_idx);
+ node->type_info = type_info;
+ node->data = type_info->init();
+ ptr =  type_info->deserialize(node->data, ptr);
+ node->child_list = slist_init(node_type_info, 2);
+ ptr = slist_deserialize(node->child_list, ptr);
+ return ptr;
+}
+void node_free(void* target){
+ Node* node = (Node*)target;
+ slist_free(node->child_list);
+ node->type_info->free(node->data);
+ free(node);
 }

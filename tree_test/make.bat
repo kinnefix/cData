@@ -1,1 +1,1 @@
-cl test.c ..\tree.c ..\slist.c
+cl test.c ..\tree.c ..\slist.c ..\typeinfo.c

@@ -1,16 +1,18 @@
+#ifndef _TREE_H
+#define _TREE_H
 #include "slist.h"
 typedef struct Node{
  void* data;
- int data_size;
  SList* child_list; //List<Node*>
- char* (*serialize_func)(char* , char* );
- char* (*deserialize_func)(char* , char* );
+ TypeInfo* type_info;
 }Node;
 
-Node* tree_init(int data_size, char* (*serialize_func)(char*, char*),char* (*deserialize_func)(char*, char*));
-void tree_add_child(Node* parent, char* data);
-int tree_write(Node* node, char* dest);
-char* tree_get_structure(Node* node, char* ptr, int* len);
-char* tree_write_data(Node* node, char* ptr);
-char* tree_read_data(char** src, char* structure, Node* node);
-Node* tree_read(char* src);
+extern TypeInfo* node_type_info;
+
+void* node_init();
+Node* tree_init(TypeInfo* type_info);
+void tree_add_child(Node* parent, void* data);
+void* node_serialize(void* node, void* ptr);
+void* node_deserialize(void* node, void* ptr);
+void node_free(void* node);
+#endif
