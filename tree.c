@@ -8,16 +8,11 @@
 extern SList* type_info_list;
 TypeInfo* node_type_info;
 
-void* node_init(){
- Node* node = (Node*)malloc(sizeof(Node));
- return (void*)node;
-}
-
-Node* tree_init(TypeInfo* type_info){
+void* tree_init(void* type_info){
  Node* root = (Node*)malloc(sizeof(Node));
  root->type_info = type_info;
- root->data = malloc(type_info->data_size);
- root->child_list = slist_init(node_type_info, 2);
+ root->data = ((TypeInfo*)type_info)->init(type_info);
+ root->child_list = slist_init(node_type_info, 0);
  return root;
 }
 
@@ -25,7 +20,8 @@ void tree_add_child(Node* parent, void* child){
  slist_append(parent->child_list, child, 1);
 }
 
-void* node_serialize(Node* node, void* ptr){
+void* node_serialize(void* src, void* ptr){
+ Node* node = *(Node**)src;
  TypeInfo* type_info = node->type_info;
  memcpy(ptr, &type_info->type_idx, sizeof(int)); ((char*)ptr)+=sizeof(int);
  ptr = type_info->serialize(node->data, ptr);
@@ -36,11 +32,10 @@ void* node_deserialize(void* dest, void* ptr){
  int type_idx;
  Node* node = (Node*)dest;
  memcpy(&type_idx, ptr, sizeof(int)); ((char*)ptr)+=sizeof(int);
- TypeInfo* type_info=slist_get(type_info_list, type_idx);
+ TypeInfo* type_info=*(TypeInfo**)slist_get(type_info_list, type_idx);
  node->type_info = type_info;
- node->data = type_info->init();
+ node->data = type_info->init(type_info);
  ptr =  type_info->deserialize(node->data, ptr);
- node->child_list = slist_init(node_type_info, 2);
  ptr = slist_deserialize(node->child_list, ptr);
  return ptr;
 }

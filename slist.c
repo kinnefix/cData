@@ -26,13 +26,14 @@ int slist_reserve(SList* list, size_t max){
  size_t size;
  if(list->type_info)
   size = max*list->type_info->data_size;
- else
-  size = sizeof(TypeInfo);
+ else{
+  size = max*sizeof(TypeInfo*);
+ }
+ if(list->data ==NULL)
+  list->data=malloc(size);
  if(list->alloced<max){
-  list->data = realloc(list->data, size*2);
-  if(list->data ==NULL)
-   return 0;
-  list->alloced = max*2;
+   list->data = realloc(list->data, size*2);
+   list->alloced = max*2;
  }
  return 1;
 }
@@ -42,11 +43,11 @@ int slist_get_len(SList* list){
 SList* slist_init(TypeInfo* type_info, size_t alloced){
  int elem_size;
  if(type_info==NULL)
-  elem_size = sizeof(TypeInfo);
+  elem_size = sizeof(TypeInfo*);
  else
   elem_size = type_info->data_size;
  SList* list = malloc(sizeof(SList));
- list->data = malloc(elem_size*alloced);
+ list->data = NULL;
  list->type_info = type_info;
  list->used = 0;
  list->alloced = alloced;
@@ -58,10 +59,11 @@ int slist_append_range(SList* list, void* src, int orig, size_t len){
  if(!slist_reserve(list, orig+len)){
   return 0;
  }
- if(list->type_info)
+ if(list->type_info){
   elem_size = list->type_info->data_size;
+ }
  else
-  elem_size = sizeof(TypeInfo);
+  elem_size = sizeof(TypeInfo*);
  size_t used = list->used;
  char* ptr0 = ((char*)list->data)+orig*elem_size;
  char* ptr1 = ((char*)list->data)+(orig+len)*elem_size;
@@ -92,7 +94,7 @@ void* slist_serialize(SList* list, void* ptr){
  memcpy(ptr, &type_info->type_idx, sizeof(int)); ((char*)ptr)+=sizeof(int);
  memcpy(ptr, &used, sizeof(size_t)); ((char*)ptr)+=sizeof(size_t);
  for(size_t i=0; i<used; i++){
-  ptr= type_info->serialize(list->data, ptr);
+  ptr= type_info->serialize(((char*)list->data)+i*type_info->data_size, ptr);
  }
  return ptr;
 }
@@ -101,12 +103,12 @@ void* slist_deserialize(SList* list, void* ptr){
  int type_idx;
  size_t used; 
  memcpy(&type_idx, ptr, sizeof(int)); ((char*)ptr)+=sizeof(int);
- TypeInfo* type_info = list->type_info = slist_get(type_info_list, type_idx);
+ TypeInfo* type_info = list->type_info = *(TypeInfo**)slist_get(type_info_list, type_idx);
  memcpy(&used, ptr, sizeof(size_t)); ((char*)ptr)+=sizeof(size_t);
  list->used = used;
  slist_reserve(list, used*2); 
  for(size_t i=0; i<used; i++){
-  void* data_ptr = type_info->init();
+  void* data_ptr = type_info->init(type_info);
   ptr = type_info->deserialize(data_ptr, ptr);
   slist_set(list, i, data_ptr);
  }
